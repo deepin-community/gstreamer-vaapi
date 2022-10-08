@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+
+include /usr/share/dpkg/default.mk
+
+CFLAGS += -Wno-error
+CXXFLAGS += -Wno-error
+LDFLAGS += -Wl,-z,defs -Wl,-O1 -Wl,--as-needed
+
+conf_flags = --libdir=lib/$(DEB_HOST_MULTIARCH) --libexecdir=lib/$(DEB_HOST_MULTIARCH)/gstreamer1.0
+
+%:
+	dh $@ --buildsystem=meson
+
+override_dh_auto_configure:
+	dh_auto_configure -- --default-library shared $(conf_flags)
+
+override_dh_auto_test:
+	xvfb-run dh_auto_test || true
