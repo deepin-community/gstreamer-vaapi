@@ -200,7 +200,7 @@ main (int argc, char *argv[])
 
   /* Print usage map */
   g_print ("USAGE: 'r' to enable/disable ROI && 'q' to quit\n");
-//define test
+
 #define SRC "videotestsrc pattern=snow ! " \
             "video/x-raw, format=NV12, width=320, framerate=5/1"
 #define ENCDEC "vaapih265enc rate-control=cbr bitrate=2000 ! vaapih265dec ! " \

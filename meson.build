@@ -1,27 +1,32 @@
 project('gstreamer-vaapi', 'c',
-  version : '1.18.5',
-  meson_version : '>= 0.48.0',
+  version : '1.22.6',
+  meson_version : '>= 0.62',
   default_options : [ 'warning_level=1',
                       'buildtype=debugoptimized' ])
+
+if get_option('default_library') == 'static'
+  error('GStreamer-VAAPI plugin not supported with `static` builds yet.')
+endif
 
 gst_version = meson.project_version()
 version_arr = gst_version.split('.')
 gst_version_major = version_arr[0].to_int()
 gst_version_minor = version_arr[1].to_int()
 gst_version_micro = version_arr[2].to_int()
- if version_arr.length() == 4
+
+if version_arr.length() == 4
   gst_version_nano = version_arr[3].to_int()
 else
   gst_version_nano = 0
 endif
 
 libva_req = ['>= 0.39.0', '!= 0.99.0']
-glib_req = '>= 2.44.0'
 libwayland_req = '>= 1.11.0'
 libdrm_req = '>= 2.4.98'
 gst_req = '>= @0@.@1@.0'.format(gst_version_major, gst_version_minor)
 
 cc = meson.get_compiler('c')
+static_build = get_option('default_library') == 'static'
 
 if cc.has_link_argument('-Wl,-Bsymbolic-functions')
   add_project_link_arguments('-Wl,-Bsymbolic-functions', language : 'c')
@@ -74,28 +79,42 @@ else
   message('GStreamer debug system is enabled')
 endif
 
-# Other deps
-gmodule_dep = dependency('gmodule-2.0', required: false)
-libva_dep = dependency('libva', version: libva_req)
+libva_dep = dependency('libva', version: libva_req,
+  fallback : ['libva', 'libva_dep'])
+libva_drm_dep = dependency('libva-drm', version: libva_req,
+  required: get_option('drm'), fallback : ['libva', 'libva_drm_dep'])
+libva_wayland_dep = dependency('libva-wayland', version: libva_req,
+  required: get_option('wayland'), fallback : ['libva', 'libva_wayland_dep'])
+libva_x11_dep = dependency('libva-x11', version: libva_req,
+  required: get_option('x11'), fallback : ['libva', 'libva_x11_dep'])
 
-libva_drm_dep = dependency('libva-drm', version: libva_req, required: false)
-libva_wayland_dep = dependency('libva-wayland', version: libva_req, required: false)
-libva_x11_dep = dependency('libva-x11', version: libva_req, required: false)
-libdrm_dep = dependency('libdrm', version: libdrm_req, required: false,
-  fallback: ['libdrm', 'ext_libdrm'])
-libudev_dep = dependency('libudev', required: false)
-egl_dep = dependency('egl', required: false)
-gl_dep = dependency('gl', required: false)
+libdrm_dep = dependency('libdrm', version: libdrm_req,
+  required: get_option('drm'), fallback: ['libdrm', 'ext_libdrm'])
+libudev_dep = dependency('libudev', required: get_option('drm'))
+
+x11_dep = dependency('x11', required: get_option('x11'))
+xrandr_dep = dependency('xrandr', required: get_option('x11'))
+
+gmodule_dep = dependency('gmodule-no-export-2.0')
+egl_dep = dependency('egl', required: get_option('egl'))
 glesv2_dep = dependency('glesv2', required: false)
+
+glx_option = get_option('glx').require(libva_x11_dep.found() and x11_dep.found(),
+    error_message: 'glx requires libva-x11 and x11 dependency')
+gl_dep = dependency('gl', required: glx_option)
+libdl_dep = cc.find_library('dl', required: glx_option)
+
+wayland_option = get_option('wayland').require(libdrm_dep.found(),
+    error_message: 'wayland requires libdrm dependency')
+wayland_client_dep = dependency('wayland-client', version: libwayland_req,
+  required: wayland_option)
+wayland_protocols_dep = dependency('wayland-protocols', version: '>= 1.15',
+  required: wayland_option)
+wayland_scanner_bin = find_program('wayland-scanner', required: wayland_option)
+
 gstcheck_dep = dependency('gstreamer-check-1.0', version : gst_req,
   required : get_option('tests'),
   fallback : ['gstreamer', 'gst_check_dep'])
-libdl_dep = cc.find_library('dl', required: false)
-wayland_client_dep = dependency('wayland-client', version: libwayland_req, required: false)
-wayland_protocols_dep = dependency('wayland-protocols', version: '>= 1.15', required: false)
-wayland_scanner_bin = find_program('wayland-scanner', required: false)
-x11_dep = dependency('x11', required: false)
-xrandr_dep = dependency('xrandr', required: false)
 
 # some of the examples can use GTK+-3
 gtk_dep = dependency('gtk+-3.0', version : '>= 3.10', required : get_option('examples'))
@@ -113,14 +132,22 @@ if glesv2_dep.found()
   endif
 endif
 
-USE_ENCODERS = get_option('with_encoders') != 'no'
-USE_VP9_ENCODER = USE_ENCODERS and cc.has_header('va/va_enc_vp9.h', dependencies: libva_dep, prefix: '#include <va/va.h>')
+USE_ENCODERS = get_option('encoders').allowed()
+USE_VP9_ENCODER = USE_ENCODERS and libva_dep.version().version_compare('>= 0.40.0')
+USE_AV1_DECODER = libva_dep.version().version_compare('>= 1.10')
 
-USE_DRM = libva_drm_dep.found() and libdrm_dep.found() and libudev_dep.found() and get_option('with_drm') != 'no'
-USE_EGL = gmodule_dep.found() and egl_dep.found() and GLES_VERSION_MASK != 0 and get_option('with_egl') != 'no'
-USE_WAYLAND = libva_wayland_dep.found() and wayland_client_dep.found() and wayland_protocols_dep.found() and wayland_scanner_bin.found() and get_option('with_wayland') != 'no'
-USE_X11 = libva_x11_dep.found() and x11_dep.found() and get_option('with_x11') != 'no'
-USE_GLX = gl_dep.found() and libdl_dep.found() and get_option('with_glx') != 'no' and USE_X11
+USE_DRM = (libva_drm_dep.found()
+    and libdrm_dep.found()
+    and libudev_dep.found())
+USE_EGL = (egl_dep.found()
+    and GLES_VERSION_MASK != 0)
+USE_WAYLAND = (libva_wayland_dep.found()
+    and wayland_client_dep.found()
+    and wayland_protocols_dep.found()
+    and wayland_scanner_bin.found()
+    and libdrm_dep.found())
+USE_X11 = (libva_x11_dep.found() and x11_dep.found())
+USE_GLX = (USE_X11 and gl_dep.found() and libdl_dep.found())
 
 if not (USE_DRM or USE_X11 or USE_WAYLAND)
   error('No renderer API found (it is requried either DRM, X11 and/or WAYLAND)')
@@ -147,7 +174,7 @@ if gstgl_dep.found()
   endif
 endif
 
-driverdir = libva_dep.get_pkgconfig_variable('driverdir')
+driverdir = libva_dep.get_variable('driverdir', default_value: '')
 if driverdir == ''
   driverdir = join_paths(get_option('prefix'), get_option('libdir'), 'dri')
 endif
@@ -161,13 +188,14 @@ cdata.set_quoted('PACKAGE_NAME', 'GStreamer VA-API Plug-ins')
 cdata.set_quoted('PACKAGE_STRING', 'GStreamer VA-API Plug-ins @0@'.format(gst_version))
 cdata.set_quoted('PACKAGE_BUGREPORT', get_option('package-origin'))
 cdata.set_quoted('VA_DRIVERS_PATH', '@0@'.format(driverdir))
-cdata.set10('USE_DRM', USE_DRM)
-cdata.set10('USE_EGL', USE_EGL)
-cdata.set10('USE_ENCODERS', USE_ENCODERS)
-cdata.set10('USE_GLX', USE_GLX)
-cdata.set10('USE_VP9_ENCODER', USE_VP9_ENCODER)
-cdata.set10('USE_WAYLAND', USE_WAYLAND)
-cdata.set10('USE_X11', USE_X11)
+cdata.set10('GST_VAAPI_USE_DRM', USE_DRM)
+cdata.set10('GST_VAAPI_USE_EGL', USE_EGL)
+cdata.set10('GST_VAAPI_USE_ENCODERS', USE_ENCODERS)
+cdata.set10('GST_VAAPI_USE_GLX', USE_GLX)
+cdata.set10('GST_VAAPI_USE_VP9_ENCODER', USE_VP9_ENCODER)
+cdata.set10('GST_VAAPI_USE_AV1_DECODER', USE_AV1_DECODER)
+cdata.set10('GST_VAAPI_USE_WAYLAND', USE_WAYLAND)
+cdata.set10('GST_VAAPI_USE_X11', USE_X11)
 cdata.set10('HAVE_XKBLIB', cc.has_header('X11/XKBlib.h', dependencies: x11_dep))
 cdata.set10('HAVE_XRANDR', xrandr_dep.found())
 cdata.set10('USE_GST_GL_HELPERS', gstgl_dep.found())
@@ -187,6 +215,8 @@ gstreamer_vaapi_args = ['-DHAVE_CONFIG_H']
 configinc = include_directories('.')
 libsinc = include_directories('gst-libs')
 
+plugins = []
+
 subdir('gst-libs')
 subdir('gst')
 subdir('tests')
@@ -195,18 +225,41 @@ subdir('docs')
 # Set release date
 if gst_version_nano == 0
   extract_release_date = find_program('scripts/extract-release-date-from-doap-file.py')
-  run_result = run_command(extract_release_date, gst_version, files('gstreamer-vaapi.doap'))
-  if run_result.returncode() == 0
-    release_date = run_result.stdout().strip()
-    cdata.set_quoted('GST_PACKAGE_RELEASE_DATETIME', release_date)
-    message('Package release date: ' + release_date)
-  else
-    # Error out if our release can't be found in the .doap file
-    error(run_result.stderr())
-  endif
+  run_result = run_command(extract_release_date, gst_version, files('gstreamer-vaapi.doap'), check: true)
+  release_date = run_result.stdout().strip()
+  cdata.set_quoted('GST_PACKAGE_RELEASE_DATETIME', release_date)
+  message('Package release date: ' + release_date)
+endif
+
+if gmodule_dep.version().version_compare('< 2.67.4')
+  cdata.set('g_memdup2(ptr,sz)', '(G_LIKELY(((guint64)(sz)) < G_MAXUINT)) ? g_memdup(ptr,sz) : (g_abort(),NULL)')
 endif
 
 configure_file(output: 'config.h', configuration: cdata)
 
-python3 = import('python').find_installation()
-run_command(python3, '-c', 'import shutil; shutil.copy("hooks/pre-commit.hook", ".git/hooks/pre-commit")')
+meson.add_dist_script('scripts/gen-changelog.py', meson.project_name(), '1.20.0', meson.project_version())
+
+pkgconfig = import('pkgconfig')
+plugins_pkgconfig_install_dir = join_paths(plugins_install_dir, 'pkgconfig')
+if get_option('default_library') == 'shared'
+  # If we don't build static plugins there is no need to generate pc files
+  plugins_pkgconfig_install_dir = disabler()
+endif
+
+plugin_names = []
+gst_plugins = []
+foreach plugin: plugins
+  pkgconfig.generate(plugin, install_dir: plugins_pkgconfig_install_dir)
+  dep = declare_dependency(link_with: plugin, variables: {'full_path': plugin.full_path()})
+  meson.override_dependency(plugin.name(), dep)
+  gst_plugins += [dep]
+  if plugin.name().startswith('gst')
+    plugin_names += [plugin.name().substring(3)]
+  else
+    plugin_names += [plugin.name()]
+  endif
+endforeach
+
+summary({
+    'Plugins': plugin_names,
+}, list_sep: ', ')
