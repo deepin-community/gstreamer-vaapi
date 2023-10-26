@@ -44,6 +44,10 @@ static const struct map gst_vaapi_h265_profile_map[] = {
   { GST_VAAPI_PROFILE_H265_MAIN_444_10,          "main-444-10"          },
   { GST_VAAPI_PROFILE_H265_MAIN_422_10,          "main-422-10"          },
   { GST_VAAPI_PROFILE_H265_MAIN12,               "main-12"              },
+  { GST_VAAPI_PROFILE_H265_SCREEN_EXTENDED_MAIN,        "screen-extended-main"       },
+  { GST_VAAPI_PROFILE_H265_SCREEN_EXTENDED_MAIN_10,     "screen-extended-main-10"    },
+  { GST_VAAPI_PROFILE_H265_SCREEN_EXTENDED_MAIN_444,    "screen-extended-main-444"   },
+  { GST_VAAPI_PROFILE_H265_SCREEN_EXTENDED_MAIN_444_10, "screen-extended-main-444-10"},
   { 0, NULL }
 /* *INDENT-ON* */
 };
@@ -146,7 +150,7 @@ gst_vaapi_utils_h265_get_profile (GstH265SPS * sps)
 
   g_return_val_if_fail (sps != NULL, GST_VAAPI_PROFILE_UNKNOWN);
 
-  profile = gst_h265_profile_tier_level_get_profile (&sps->profile_tier_level);
+  profile = gst_h265_get_profile_from_sps (sps);
   switch (profile) {
     case GST_H265_PROFILE_MAIN:
       /* Main Intra, recognize it as MAIN */
@@ -171,6 +175,11 @@ gst_vaapi_utils_h265_get_profile (GstH265SPS * sps)
     case GST_H265_PROFILE_MAIN_422_10_INTRA:
       vaapi_profile = GST_VAAPI_PROFILE_H265_MAIN_422_10;
       break;
+    case GST_H265_PROFILE_MAIN_422_12:
+      /* Main 422_12 Intra, recognize it as MAIN_422_12 */
+    case GST_H265_PROFILE_MAIN_422_12_INTRA:
+      vaapi_profile = GST_VAAPI_PROFILE_H265_MAIN_422_12;
+      break;
     case GST_H265_PROFILE_MAIN_444:
       /* Main 444 Intra, recognize it as MAIN_444 */
     case GST_H265_PROFILE_MAIN_444_INTRA:
@@ -180,6 +189,11 @@ gst_vaapi_utils_h265_get_profile (GstH265SPS * sps)
       /* Main 444_10 Intra, recognize it as MAIN_444_10 */
     case GST_H265_PROFILE_MAIN_444_10_INTRA:
       vaapi_profile = GST_VAAPI_PROFILE_H265_MAIN_444_10;
+      break;
+    case GST_H265_PROFILE_MAIN_444_12:
+      /* Main 444_12 Intra, recognize it as MAIN_444_12 */
+    case GST_H265_PROFILE_MAIN_444_12_INTRA:
+      vaapi_profile = GST_VAAPI_PROFILE_H265_MAIN_444_12;
       break;
     case GST_H265_PROFILE_SCREEN_EXTENDED_MAIN:
       vaapi_profile = GST_VAAPI_PROFILE_H265_SCREEN_EXTENDED_MAIN;
@@ -225,6 +239,15 @@ gst_vaapi_utils_h265_get_profile_idc (GstVaapiProfile profile)
       /* Fall through */
     case GST_VAAPI_PROFILE_H265_MAIN12:
       profile_idc = GST_H265_PROFILE_IDC_FORMAT_RANGE_EXTENSION;
+      break;
+    case GST_VAAPI_PROFILE_H265_SCREEN_EXTENDED_MAIN:
+      /* Fall through */
+    case GST_VAAPI_PROFILE_H265_SCREEN_EXTENDED_MAIN_10:
+      /* Fall through */
+    case GST_VAAPI_PROFILE_H265_SCREEN_EXTENDED_MAIN_444:
+      /* Fall through */
+    case GST_VAAPI_PROFILE_H265_SCREEN_EXTENDED_MAIN_444_10:
+      profile_idc = GST_H265_PROFILE_IDC_SCREEN_CONTENT_CODING;
       break;
     default:
       GST_DEBUG ("unsupported GstVaapiProfile value");
@@ -369,12 +392,16 @@ gst_vaapi_utils_h265_get_chroma_type (guint chroma_format_idc,
         chroma_type = GST_VAAPI_CHROMA_TYPE_YUV422;
       else if (depth > 8 && depth <= 10)
         chroma_type = GST_VAAPI_CHROMA_TYPE_YUV422_10BPP;
+      else if (depth > 10 && depth <= 12)
+        chroma_type = GST_VAAPI_CHROMA_TYPE_YUV422_12BPP;
       break;
     case 3:
       if (depth == 8)
         chroma_type = GST_VAAPI_CHROMA_TYPE_YUV444;
       else if (depth > 8 && depth <= 10)
         chroma_type = GST_VAAPI_CHROMA_TYPE_YUV444_10BPP;
+      else if (depth > 10 && depth <= 12)
+        chroma_type = GST_VAAPI_CHROMA_TYPE_YUV444_12BPP;
       break;
     default:
       break;
@@ -403,10 +430,12 @@ gst_vaapi_utils_h265_get_chroma_format_idc (GstVaapiChromaType chroma_type)
       break;
     case GST_VAAPI_CHROMA_TYPE_YUV422:
     case GST_VAAPI_CHROMA_TYPE_YUV422_10BPP:
+    case GST_VAAPI_CHROMA_TYPE_YUV422_12BPP:
       chroma_format_idc = 2;
       break;
     case GST_VAAPI_CHROMA_TYPE_YUV444:
     case GST_VAAPI_CHROMA_TYPE_YUV444_10BPP:
+    case GST_VAAPI_CHROMA_TYPE_YUV444_12BPP:
       chroma_format_idc = 3;
       break;
     default:

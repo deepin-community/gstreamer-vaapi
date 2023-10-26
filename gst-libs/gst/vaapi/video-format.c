@@ -35,7 +35,7 @@
 #define DEBUG 1
 #include "gst/vaapi/gstvaapidebug.h"
 
-#if USE_DRM
+#if GST_VAAPI_USE_DRM
 #include <drm_fourcc.h>
 #endif
 
@@ -49,7 +49,7 @@ typedef struct _GstVideoFormatMapMap
 
 #define VA_BYTE_ORDER_NOT_CARE 0
 
-#if USE_DRM
+#if GST_VAAPI_USE_DRM
 #define MAKE_DRM_FORMAT(DRM_FORMAT) G_PASTE(DRM_FORMAT_,DRM_FORMAT)
 #else
 #define MAKE_DRM_FORMAT(DRM_FORMAT) 0
@@ -112,6 +112,8 @@ static const GstVideoFormatMap gst_vaapi_video_default_formats[] = {
 
   DEF_YUV (VA_BYTE_ORDER_NOT_CARE, Y210, Y210, ('Y', '2', '1', '0'), 32, 422_10BPP),
   DEF_YUV (VA_BYTE_ORDER_NOT_CARE, Y410, Y410, ('Y', '4', '1', '0'), 32, 444_10BPP),
+  DEF_YUV (VA_BYTE_ORDER_NOT_CARE, Y212_LE, Y212, ('Y', '2', '1', '2'), 32, 422_12BPP),
+  DEF_YUV (VA_BYTE_ORDER_NOT_CARE, Y412_LE, Y412, ('Y', '4', '1', '2'), 32, 444_12BPP),
 
   /* RGB formats */
   DEF_RGB (VA_LSB_FIRST, ARGB, BGRA8888, ('A', 'R', 'G', 'B'), 32, 32, 0x0000ff00,
@@ -183,7 +185,7 @@ static const GstVideoFormatMap gst_vaapi_video_default_formats[] = {
 #undef DEF_RGB
 #undef DEF_YUV
 
-static GArray *gst_vaapi_video_formats_map;
+static GArray *gst_vaapi_video_formats_map = NULL;
 
 static inline gboolean
 va_format_is_rgb (const VAImageFormat * va_format)
@@ -252,6 +254,9 @@ get_map_by_gst_format (const GArray * formats, GstVideoFormat format)
   const GstVideoFormatMap *entry;
   guint i;
 
+  if (!formats)
+    return NULL;
+
   for (i = 0; i < formats->len; i++) {
     entry = &g_array_index (formats, GstVideoFormatMap, i);
     if (entry->format == format)
@@ -266,6 +271,9 @@ get_map_by_va_format (const VAImageFormat * va_format)
   const GArray *formats = gst_vaapi_video_formats_map;
   const GstVideoFormatMap *entry;
   guint i;
+
+  if (!formats)
+    return NULL;
 
   for (i = 0; i < formats->len; i++) {
     entry = &g_array_index (formats, GstVideoFormatMap, i);
@@ -466,6 +474,10 @@ gst_vaapi_video_format_from_chroma (guint chroma_type)
       return GST_VIDEO_FORMAT_Y210;
     case GST_VAAPI_CHROMA_TYPE_YUV444_10BPP:
       return GST_VIDEO_FORMAT_Y410;
+    case GST_VAAPI_CHROMA_TYPE_YUV444_12BPP:
+      return GST_VIDEO_FORMAT_Y412_LE;
+    case GST_VAAPI_CHROMA_TYPE_YUV422_12BPP:
+      return GST_VIDEO_FORMAT_Y212_LE;
     default:
       return GST_VIDEO_FORMAT_UNKNOWN;
   }
@@ -631,10 +643,13 @@ gst_vaapi_video_format_create_map (VAImageFormat * formats, guint n)
 guint
 gst_vaapi_drm_format_from_va_fourcc (guint32 fourcc)
 {
-#if USE_DRM
+#if GST_VAAPI_USE_DRM
   const GArray *map = gst_vaapi_video_formats_map;
   const GstVideoFormatMap *m;
   guint i;
+
+  if (!map)
+    return GST_VIDEO_FORMAT_UNKNOWN;
 
   /* Note: VA fourcc values are now standardized and shall represent
      a unique format. The associated VAImageFormat is just a hint to
@@ -664,10 +679,13 @@ gst_vaapi_drm_format_from_va_fourcc (guint32 fourcc)
 GstVideoFormat
 gst_vaapi_video_format_from_drm_format (guint drm_format)
 {
-#if USE_DRM
+#if GST_VAAPI_USE_DRM
   const GArray *map = gst_vaapi_video_formats_map;
   const GstVideoFormatMap *m;
   guint i;
+
+  if (!map)
+    return GST_VIDEO_FORMAT_UNKNOWN;
 
   for (i = 0; i < map->len; i++) {
     m = &g_array_index (map, GstVideoFormatMap, i);

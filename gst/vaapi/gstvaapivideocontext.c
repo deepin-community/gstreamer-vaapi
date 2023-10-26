@@ -28,11 +28,14 @@
 #if USE_GST_GL_HELPERS
 # include <gst/gl/gl.h>
 #endif
-#if USE_X11
+#if GST_VAAPI_USE_X11
 #include <gst/vaapi/gstvaapidisplay_x11.h>
 #endif
-#if USE_WAYLAND
+#if GST_VAAPI_USE_WAYLAND
 #include <gst/vaapi/gstvaapidisplay_wayland.h>
+#endif
+#if GST_VAAPI_USE_DRM
+#include <gst/vaapi/gstvaapidisplay_drm.h>
 #endif
 
 GST_DEBUG_CATEGORY_STATIC (GST_CAT_CONTEXT);
@@ -61,6 +64,9 @@ gst_vaapi_video_context_set_display (GstContext * context,
   structure = gst_context_writable_structure (context);
   gst_structure_set (structure, GST_VAAPI_DISPLAY_CONTEXT_TYPE_NAME,
       GST_TYPE_VAAPI_DISPLAY, display, NULL);
+  /* The outside user may access it as a generic Gobject. */
+  gst_structure_set (structure, "gst.vaapi.Display.GObject",
+      GST_TYPE_OBJECT, display, NULL);
 }
 
 GstContext *
@@ -98,7 +104,7 @@ gst_vaapi_video_context_get_display (GstContext * context, gboolean app_context,
 
     if (gst_structure_get (structure, "va-display", G_TYPE_POINTER, &va_display,
             NULL)) {
-#if USE_X11
+#if GST_VAAPI_USE_X11
       Display *x11_display = NULL;
       if (gst_structure_get (structure, "x11-display", G_TYPE_POINTER,
               &x11_display, NULL)) {
@@ -106,7 +112,7 @@ gst_vaapi_video_context_get_display (GstContext * context, gboolean app_context,
             gst_vaapi_display_x11_new_with_va_display (va_display, x11_display);
       }
 #endif
-#if USE_WAYLAND
+#if GST_VAAPI_USE_WAYLAND
       if (!display) {
         struct wl_display *wl_display = NULL;
         if (gst_structure_get (structure, "wl-display", G_TYPE_POINTER,
@@ -114,6 +120,15 @@ gst_vaapi_video_context_get_display (GstContext * context, gboolean app_context,
           display =
               gst_vaapi_display_wayland_new_with_va_display (va_display,
               wl_display);
+        }
+      }
+#endif
+#if GST_VAAPI_USE_DRM
+      if (!display) {
+        gint fd = -1;
+        if (gst_structure_get (structure, "drm-device-fd", G_TYPE_INT, &fd,
+                NULL)) {
+          display = gst_vaapi_display_drm_new_with_va_display (va_display, fd);
         }
       }
 #endif

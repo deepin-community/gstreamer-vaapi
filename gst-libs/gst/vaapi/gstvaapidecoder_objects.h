@@ -198,6 +198,11 @@ gst_vaapi_picture_decode (GstVaapiPicture * picture);
 
 G_GNUC_INTERNAL
 gboolean
+gst_vaapi_picture_decode_with_surface_id (GstVaapiPicture * picture,
+    VASurfaceID surface_id);
+
+G_GNUC_INTERNAL
+gboolean
 gst_vaapi_picture_output (GstVaapiPicture * picture);
 
 G_GNUC_INTERNAL
@@ -260,6 +265,12 @@ GstVaapiSlice *
 gst_vaapi_slice_new (GstVaapiDecoder * decoder, gconstpointer param,
     guint param_size, const guchar * data, guint data_size);
 
+G_GNUC_INTERNAL
+GstVaapiSlice *
+gst_vaapi_slice_new_n_params (GstVaapiDecoder * decoder,
+    gconstpointer param, guint param_size, guint param_num, const guchar * data,
+    guint data_size);
+
 /* ------------------------------------------------------------------------- */
 /* --- Helpers to create codec-dependent objects                         --- */
 /* ------------------------------------------------------------------------- */
@@ -271,6 +282,11 @@ gst_vaapi_slice_new (GstVaapiDecoder * decoder, gconstpointer param,
 #define GST_VAAPI_SLICE_NEW(codec, decoder, buf, buf_size)      \
   gst_vaapi_slice_new (GST_VAAPI_DECODER_CAST (decoder),        \
       NULL, sizeof (G_PASTE (VASliceParameterBuffer, codec)),   \
+      buf, buf_size)
+
+#define GST_VAAPI_SLICE_NEW_N_PARAMS(codec, decoder, buf, buf_size, n) \
+  gst_vaapi_slice_new_n_params (GST_VAAPI_DECODER_CAST (decoder),    \
+      NULL, sizeof (G_PASTE (VASliceParameterBuffer, codec)), n,     \
       buf, buf_size)
 
 G_END_DECLS

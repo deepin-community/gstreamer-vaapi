@@ -242,7 +242,8 @@ do_decode (VADisplay dpy, VAContextID ctx, VABufferID * buf_id, void **buf_ptr)
 }
 
 gboolean
-gst_vaapi_picture_decode (GstVaapiPicture * picture)
+gst_vaapi_picture_decode_with_surface_id (GstVaapiPicture * picture,
+    VASurfaceID surface_id)
 {
   GstVaapiIqMatrix *iq_matrix;
   GstVaapiBitPlane *bitplane;
@@ -254,13 +255,14 @@ gst_vaapi_picture_decode (GstVaapiPicture * picture)
   guint i;
 
   g_return_val_if_fail (GST_VAAPI_IS_PICTURE (picture), FALSE);
+  g_return_val_if_fail (surface_id != VA_INVALID_SURFACE, FALSE);
 
   va_display = GET_VA_DISPLAY (picture);
   va_context = GET_VA_CONTEXT (picture);
 
-  GST_DEBUG ("decode picture 0x%08x", picture->surface_id);
+  GST_DEBUG ("decode picture 0x%08x", surface_id);
 
-  status = vaBeginPicture (va_display, va_context, picture->surface_id);
+  status = vaBeginPicture (va_display, va_context, surface_id);
   if (!vaapi_check_status (status, "vaBeginPicture()"))
     return FALSE;
 
@@ -317,6 +319,15 @@ gst_vaapi_picture_decode (GstVaapiPicture * picture)
   if (!vaapi_check_status (status, "vaEndPicture()"))
     return FALSE;
   return TRUE;
+}
+
+gboolean
+gst_vaapi_picture_decode (GstVaapiPicture * picture)
+{
+  g_return_val_if_fail (GST_VAAPI_IS_PICTURE (picture), FALSE);
+
+  return gst_vaapi_picture_decode_with_surface_id (picture,
+      picture->surface_id);
 }
 
 /* Mark picture as output for internal purposes only. Don't push frame out */
@@ -457,9 +468,10 @@ gst_vaapi_slice_create (GstVaapiSlice * slice,
   if (!success)
     return FALSE;
 
-  success = vaapi_create_buffer (GET_VA_DISPLAY (slice), GET_VA_CONTEXT (slice),
-      VASliceParameterBufferType, args->param_size, args->param,
-      &slice->param_id, &slice->param);
+  g_assert (args->param_num >= 1);
+  success = vaapi_create_n_elements_buffer (GET_VA_DISPLAY (slice),
+      GET_VA_CONTEXT (slice), VASliceParameterBufferType, args->param_size,
+      args->param, &slice->param_id, &slice->param, args->param_num);
   if (!success)
     return FALSE;
 
@@ -478,5 +490,18 @@ gst_vaapi_slice_new (GstVaapiDecoder * decoder,
 
   object = gst_vaapi_codec_object_new (&GstVaapiSliceClass,
       GST_VAAPI_CODEC_BASE (decoder), param, param_size, data, data_size, 0);
+  return GST_VAAPI_SLICE_CAST (object);
+}
+
+GstVaapiSlice *
+gst_vaapi_slice_new_n_params (GstVaapiDecoder * decoder,
+    gconstpointer param, guint param_size, guint param_num, const guchar * data,
+    guint data_size)
+{
+  GstVaapiCodecObject *object;
+
+  object = gst_vaapi_codec_object_new_with_param_num (&GstVaapiSliceClass,
+      GST_VAAPI_CODEC_BASE (decoder), param, param_size, param_num, data,
+      data_size, 0);
   return GST_VAAPI_SLICE_CAST (object);
 }

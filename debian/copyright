@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: gstreamer-vaapi
-Source: https://github.com/01org/gstreamer-vaapi/
+Source: https://gitlab.freedesktop.org/gstreamer/gstreamer
 
 Files: *
 Copyright: 2010-2011, Splitted-Desktop Systems

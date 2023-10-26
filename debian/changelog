@@ -1,8 +1,108 @@
-gstreamer-vaapi (1.18.5-1) UNRELEASED; urgency=medium
+gstreamer-vaapi (1.22.6-1) unstable; urgency=medium
 
-  * update
+  * Team upload
+  * New upstream release
 
- -- Maintainers of GStreamer packages <gstreamer-vaapi@packages.debian.org>  Fri, 17 Jun 2022 10:06:21 +0800
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 25 Sep 2023 12:58:52 -0400
+
+gstreamer-vaapi (1.22.5-1) unstable; urgency=medium
+
+  * Team upload
+  * New upstream release
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 15 Aug 2023 11:16:55 -0400
+
+gstreamer-vaapi (1.22.4-1) unstable; urgency=medium
+
+  * Team upload
+  * New upstream release
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Fri, 30 Jun 2023 12:20:58 -0400
+
+gstreamer-vaapi (1.22.3-2) unstable; urgency=medium
+
+  * Team upload
+  * Release to unstable
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 12 Jun 2023 14:49:45 -0400
+
+gstreamer-vaapi (1.22.3-1) experimental; urgency=medium
+
+  * Team upload
+  * New upstream release
+  * debian/rules: Enable all hardening flags
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Sun, 21 May 2023 08:18:04 -0400
+
+gstreamer-vaapi (1.22.1-1) experimental; urgency=medium
+
+  * Team upload
+  * New upstream bugfix release (LP: #2015129)
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Tue, 04 Apr 2023 10:30:38 -0400
+
+gstreamer-vaapi (1.22.0-2) unstable; urgency=medium
+
+  * Release to unstable
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Sat, 28 Jan 2023 14:37:49 -0500
+
+gstreamer-vaapi (1.22.0-1) experimental; urgency=medium
+
+  * Team upload
+  * New upstream release
+  * Bump minimum gstreamer and meson
+  * debian/rules: Set -Dauto_features=enabled
+  * debian/rules: Set package-origin
+  * Bump Standards-Version to 4.6.2
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Fri, 27 Jan 2023 13:17:25 -0500
+
+gstreamer-vaapi (1.20.5-1) unstable; urgency=medium
+
+  * Team upload
+
+  [ Jeremy Bicha ]
+  * New upstream release
+  * Add debian/upstream/signing-key.asc and update debian/watch to match
+  * Update debian/upstream/metadata
+  * Set Rules-Requires-Root: no
+  * Update standards version to 4.6.1, no changes needed
+
+  [ Debian Janitor ]
+  * Remove constraints unnecessary since buster
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Thu, 05 Jan 2023 15:26:29 -0500
+
+gstreamer-vaapi (1.20.3-1) unstable; urgency=medium
+
+  * New upstream bugfix release.
+
+ -- Sebastian Dröge <slomo@debian.org>  Tue, 21 Jun 2022 11:21:59 +0300
+
+gstreamer-vaapi (1.20.2-1) unstable; urgency=medium
+
+  * New upstream bugfix release.
+
+ -- Sebastian Dröge <slomo@debian.org>  Tue, 03 May 2022 10:31:31 +0300
+
+gstreamer-vaapi (1.20.1-1) unstable; urgency=medium
+
+  * New upstream bugfix release.
+
+ -- Sebastian Dröge <slomo@debian.org>  Mon, 14 Mar 2022 17:59:13 +0200
+
+gstreamer-vaapi (1.20.0-1) unstable; urgency=medium
+
+  * New upstream release.
+
+ -- Sebastian Dröge <slomo@debian.org>  Fri, 04 Feb 2022 09:06:58 +0200
+
+gstreamer-vaapi (1.19.90-1) experimental; urgency=medium
+
+  * New upstream release candidate.
+
+ -- Sebastian Dröge <slomo@debian.org>  Fri, 28 Jan 2022 18:43:30 +0200
 
 gstreamer-vaapi (1.18.5-1) unstable; urgency=medium
 

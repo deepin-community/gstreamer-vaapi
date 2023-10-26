@@ -255,6 +255,10 @@ string_of_VAProfile (VAProfile profile)
       MAP (VP9Profile1);
       MAP (VP9Profile2);
       MAP (VP9Profile3);
+#if VA_CHECK_VERSION(1,8,0)
+      MAP (AV1Profile0);
+      MAP (AV1Profile1);
+#endif
 #undef MAP
     default:
       break;
@@ -985,7 +989,8 @@ from_GstVideoColorimetry (const GstVideoColorimetry * const colorimetry)
   /* NOTE: VAProcColorStandardBT2020 in VAAPI is the same as
    * GST_VIDEO_COLORIMETRY_BT2020_10 in gstreamer. */
   if (gst_video_colorimetry_matches (colorimetry,
-          GST_VIDEO_COLORIMETRY_BT2020_10))
+          GST_VIDEO_COLORIMETRY_BT2020_10) ||
+      gst_video_colorimetry_matches (colorimetry, GST_VIDEO_COLORIMETRY_BT2020))
     return VAProcColorStandardBT2020;
   if (gst_video_colorimetry_matches (colorimetry, GST_VIDEO_COLORIMETRY_BT601))
     return VAProcColorStandardBT601;

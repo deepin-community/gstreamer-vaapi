@@ -41,6 +41,16 @@
 #define DEBUG_VAAPI_DISPLAY 1
 #include "gstvaapidebug.h"
 
+#ifndef MAXPATHLEN
+#if defined(PATH_MAX)
+#define MAXPATHLEN PATH_MAX
+#elif defined(_PC_PATH_MAX)
+#define MAXPATHLEN sysconf(_PC_PATH_MAX)
+#else
+#define MAXPATHLEN 2048
+#endif
+#endif
+
 G_DEFINE_TYPE_WITH_PRIVATE (GstVaapiDisplayDRM, gst_vaapi_display_drm,
     GST_TYPE_VAAPI_DISPLAY);
 
@@ -182,14 +192,9 @@ set_device_path_from_fd (GstVaapiDisplay * display, gint drm_device)
 {
   GstVaapiDisplayDRMPrivate *const priv =
       GST_VAAPI_DISPLAY_DRM_PRIVATE (display);
-  const gchar *busid, *path, *str;
-  gsize busid_length, path_length;
-  struct udev *udev = NULL;
-  struct udev_device *device;
-  struct udev_enumerate *e = NULL;
-  struct udev_list_entry *l;
   gboolean success = FALSE;
-  gint i;
+  gchar fd_name[MAXPATHLEN];
+  GError *error = NULL;
 
   g_free (priv->device_path);
   priv->device_path = NULL;
@@ -197,61 +202,23 @@ set_device_path_from_fd (GstVaapiDisplay * display, gint drm_device)
   if (drm_device < 0)
     goto end;
 
-  busid = drmGetBusid (drm_device);
-  if (!busid)
+  sprintf (fd_name, "/proc/%d/fd/%d", getpid (), drm_device);
+  priv->device_path = g_file_read_link (fd_name, &error);
+
+  if (error) {
+    g_error_free (error);
     goto end;
-
-  for (i = 0; allowed_subsystems[i] != NULL; i++) {
-    busid_length = strlen (allowed_subsystems[i]);
-
-    if (strncmp (busid, allowed_subsystems[i], busid_length) == 0) {
-      busid += busid_length + 1;
-      busid_length = strlen (busid);
-    }
   }
 
-  if (allowed_subsystems[i] == NULL)
-    goto end;
-
-  udev = udev_new ();
-  if (!udev)
-    goto end;
-
-  e = udev_enumerate_new (udev);
-  if (!e)
-    goto end;
-
-  udev_enumerate_add_match_subsystem (e, "drm");
-  udev_enumerate_scan_devices (e);
-  udev_list_entry_foreach (l, udev_enumerate_get_list_entry (e)) {
-    path = udev_list_entry_get_name (l);
-    str = strstr (path, busid);
-    if (!str || str <= path || str[-1] != '/')
-      continue;
-
-    path_length = strlen (path);
-    if (str + busid_length >= path + path_length)
-      continue;
-    if (strncmp (&str[busid_length], "/drm/card", 9) != 0 &&
-        strncmp (&str[busid_length], "/drm/renderD", 12) != 0)
-      continue;
-
-    device = udev_device_new_from_syspath (udev, path);
-    if (!device)
-      continue;
-
-    path = udev_device_get_devnode (device);
-    priv->device_path = g_strdup (path);
-    udev_device_unref (device);
-    break;
+  if (g_str_has_prefix (priv->device_path, "/dev/dri/card") ||
+      g_str_has_prefix (priv->device_path, "/dev/dri/renderD"))
+    success = TRUE;
+  else {
+    g_free (priv->device_path);
+    priv->device_path = NULL;
   }
-  success = TRUE;
 
 end:
-  if (e)
-    udev_enumerate_unref (e);
-  if (udev)
-    udev_unref (udev);
   return success;
 }
 
@@ -370,23 +337,35 @@ GstVaapiDisplay *
 gst_vaapi_display_drm_new (const gchar * device_path)
 {
   GstVaapiDisplay *display;
-  guint types[2], i, num_types = 0;
+  guint types[3], i, num_types = 0;
+  gpointer device_paths[3];
 
   g_mutex_lock (&g_drm_device_type_lock);
-  if (device_path)
+  if (device_path) {
+    device_paths[num_types] = (gpointer) device_path;
     types[num_types++] = 0;
-  else if (g_drm_device_type)
+  } else if (g_drm_device_type) {
+    device_paths[num_types] = (gpointer) device_path;
     types[num_types++] = g_drm_device_type;
-  else {
-    types[num_types++] = DRM_DEVICE_RENDERNODES;
-    types[num_types++] = DRM_DEVICE_LEGACY;
+  } else {
+    const gchar *user_choice = g_getenv ("GST_VAAPI_DRM_DEVICE");
+
+    if (user_choice) {
+      device_paths[num_types] = (gpointer) user_choice;
+      types[num_types++] = 0;
+    } else {
+      device_paths[num_types] = (gpointer) device_path;
+      types[num_types++] = DRM_DEVICE_RENDERNODES;
+      device_paths[num_types] = (gpointer) device_path;
+      types[num_types++] = DRM_DEVICE_LEGACY;
+    }
   }
 
   for (i = 0; i < num_types; i++) {
     g_drm_device_type = types[i];
     display = g_object_new (GST_TYPE_VAAPI_DISPLAY_DRM, NULL);
     display = gst_vaapi_display_config (display,
-        GST_VAAPI_DISPLAY_INIT_FROM_DISPLAY_NAME, (gpointer) device_path);
+        GST_VAAPI_DISPLAY_INIT_FROM_DISPLAY_NAME, device_paths[i]);
     if (display || device_path)
       break;
   }
@@ -415,6 +394,40 @@ gst_vaapi_display_drm_new_with_device (gint device)
   display = g_object_new (GST_TYPE_VAAPI_DISPLAY_DRM, NULL);
   return gst_vaapi_display_config (display,
       GST_VAAPI_DISPLAY_INIT_FROM_NATIVE_DISPLAY, GINT_TO_POINTER (device));
+}
+
+/**
+ * gst_vaapi_display_drm_new_with_va_display:
+ * @va_display: a VADisplay #va_display
+ * @fd: an open DRM device (file descriptor) #fd
+ *
+ * Creates a #GstVaapiDisplay based on the VADisplay @va_display and
+ * the open DRM device @fd.
+ * The caller still owns the device file descriptor and must call close()
+ * when all #GstVaapiDisplay references are released.
+ *
+ * Return value: a newly allocated #GstVaapiDisplay object
+ */
+
+GstVaapiDisplay *
+gst_vaapi_display_drm_new_with_va_display (VADisplay va_display, gint fd)
+{
+  GstVaapiDisplay *display;
+  GstVaapiDisplayInfo info = {
+    .va_display = va_display,
+    .native_display = GINT_TO_POINTER (fd),
+  };
+
+  g_return_val_if_fail (fd >= 0, NULL);
+
+  display = g_object_new (GST_TYPE_VAAPI_DISPLAY_DRM, NULL);
+  if (!gst_vaapi_display_config (display,
+          GST_VAAPI_DISPLAY_INIT_FROM_VA_DISPLAY, &info)) {
+    gst_object_unref (display);
+    return NULL;
+  }
+
+  return display;
 }
 
 /**

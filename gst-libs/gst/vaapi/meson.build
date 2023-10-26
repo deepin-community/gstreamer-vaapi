@@ -110,6 +110,11 @@ if USE_VP9_ENCODER
   gstlibvaapi_headers += 'gstvaapiencoder_vp9.h'
 endif
 
+if USE_AV1_DECODER
+  gstlibvaapi_sources += 'gstvaapidecoder_av1.c'
+  gstlibvaapi_headers += 'gstvaapidecoder_av1.h'
+endif
+
 if USE_DRM
   gstlibvaapi_sources += [
       'gstvaapidisplay_drm.c',
@@ -166,7 +171,7 @@ endif
 
 if USE_WAYLAND
   # The XDG shell interface needs to be generated first
-  wayland_protocols_basedir = wayland_protocols_dep.get_pkgconfig_variable('pkgdatadir')
+  wayland_protocols_basedir = wayland_protocols_dep.get_variable('pkgdatadir')
   xdg_shell_xml_spec = join_paths(wayland_protocols_basedir, 'stable', 'xdg-shell', 'xdg-shell.xml')
   xdg_shell_header = custom_target('vaapi-xdg-shell-client-header',
       command: [ wayland_scanner_bin, 'client-header', '@INPUT@', '@OUTPUT@' ],
