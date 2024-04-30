@@ -49,18 +49,6 @@ typedef struct
   VppTestCoordinate expect;
 } VppTestCoordinateParams;
 
-GST_START_TEST (test_make)
-{
-  GstElement *vaapipostproc;
-
-  vaapipostproc = gst_element_factory_make ("vaapipostproc", "vaapipostproc");
-  fail_unless (vaapipostproc != NULL, "Failed to create vaapipostproc element");
-
-  gst_object_unref (vaapipostproc);
-}
-
-GST_END_TEST;
-
 static void
 vpp_test_init_context (VppTestContext * ctx)
 {
@@ -155,8 +143,7 @@ static void
 vpp_test_mouse_events (VppTestContext * ctx,
     const VppTestCoordinateParams * const params, const size_t nparams)
 {
-  GstStructure *structure;
-  GstEvent *event;
+  GstEvent *event = NULL;
   VppTestCoordinate probed = { 0, };
   guint i, j;
 
@@ -180,13 +167,23 @@ vpp_test_mouse_events (VppTestContext * ctx,
     for (j = 0; j < G_N_ELEMENTS (mouse_events); ++j) {
       probed.x = probed.y = -1;
 
+      switch (j) {
+        case 0:
+          event = gst_navigation_event_new_mouse_move (params[i].send.x,
+              params[i].send.y, GST_NAVIGATION_MODIFIER_NONE);
+          break;
+        case 1:
+          event = gst_navigation_event_new_mouse_button_press (0,
+              params[i].send.x, params[i].send.y, GST_NAVIGATION_MODIFIER_NONE);
+          break;
+        case 2:
+          event = gst_navigation_event_new_mouse_button_release (0,
+              params[i].send.x, params[i].send.y, GST_NAVIGATION_MODIFIER_NONE);
+          break;
+      }
+
       GST_LOG ("sending %s event %fx%f", mouse_events[j], params[i].send.x,
           params[i].send.y);
-      structure = gst_structure_new ("application/x-gst-navigation", "event",
-          G_TYPE_STRING, mouse_events[j],
-          "pointer_x", G_TYPE_DOUBLE, params[i].send.x,
-          "pointer_y", G_TYPE_DOUBLE, params[i].send.y, NULL);
-      event = gst_event_new_navigation (structure);
       gst_element_send_event (ctx->pipeline, event);
 
       GST_LOG ("probed %s event %fx%f", mouse_events[j], probed.x, probed.y);
@@ -381,11 +378,24 @@ vaapipostproc_suite (void)
 {
   Suite *s = suite_create ("vaapipostproc");
   TCase *tc_chain = tcase_create ("general");
+  gboolean has_vaapipostproc = FALSE;
+
+  {
+    GstElement *vaapipostproc;
+
+    vaapipostproc = gst_element_factory_make ("vaapipostproc", NULL);
+    if (vaapipostproc) {
+      has_vaapipostproc = TRUE;
+      gst_object_unref (vaapipostproc);
+    }
+  }
 
   suite_add_tcase (s, tc_chain);
-  tcase_add_test (tc_chain, test_make);
-  tcase_add_test (tc_chain, test_crop_mouse_events);
-  tcase_add_test (tc_chain, test_orientation_mouse_events);
+
+  if (has_vaapipostproc) {
+    tcase_add_test (tc_chain, test_crop_mouse_events);
+    tcase_add_test (tc_chain, test_orientation_mouse_events);
+  }
 
   return s;
 }

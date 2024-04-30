@@ -71,6 +71,7 @@ static const GstVaapiCodecMap gst_vaapi_codecs[] = {
   {GST_VAAPI_CODEC_VP8, "vp8"},
   {GST_VAAPI_CODEC_H265, "h265"},
   {GST_VAAPI_CODEC_VP9, "vp9"},
+  {GST_VAAPI_CODEC_AV1, "av1"},
   {0,}
 };
 
@@ -130,6 +131,10 @@ static const GstVaapiProfileMap gst_vaapi_profiles[] = {
       "video/x-h265", "main-444-10"},
   {GST_VAAPI_PROFILE_H265_MAIN12, VAProfileHEVCMain12,
       "video/x-h265", "main-12"},
+  {GST_VAAPI_PROFILE_H265_MAIN_444_12, VAProfileHEVCMain444_12,
+      "video/x-h265", "main-444-12"},
+  {GST_VAAPI_PROFILE_H265_MAIN_422_12, VAProfileHEVCMain422_12,
+      "video/x-h265", "main-422-12"},
   {GST_VAAPI_PROFILE_H265_SCREEN_EXTENDED_MAIN, VAProfileHEVCSccMain,
       "video/x-h265", "screen-extended-main"},
   {GST_VAAPI_PROFILE_H265_SCREEN_EXTENDED_MAIN_10, VAProfileHEVCSccMain10,
@@ -150,6 +155,28 @@ static const GstVaapiProfileMap gst_vaapi_profiles[] = {
       "video/x-vp9", "2"},
   {GST_VAAPI_PROFILE_VP9_3, VAProfileVP9Profile3,
       "video/x-vp9", "3"},
+#if VA_CHECK_VERSION(1,8,0)
+  /* Spec A.2:
+     "Main" compliant decoders must be able to decode streams with
+     seq_profile equal to 0.
+     "High" compliant decoders must be able to decode streams with
+     seq_profile less than or equal to 1.
+     "Professional" compliant decoders must be able to decode streams
+     with seq_profile less than or equal to 2.
+
+     The correct relationship between profile "main" "high" "professional"
+     and seq_profile "0" "1" "2" should be:
+     main <------> { 0 }
+     high <------> { main, 1 }
+     professional <------> { high, 2 }
+
+     So far, all vaapi decoders can support "0" when they support "1",
+     we just map "0" to "main" and "1" to "high" in caps string.  */
+  {GST_VAAPI_PROFILE_AV1_0, VAProfileAV1Profile0,
+      "video/x-av1", "main"},
+  {GST_VAAPI_PROFILE_AV1_1, VAProfileAV1Profile1,
+      "video/x-av1", "high"},
+#endif
   {0,}
 };
 

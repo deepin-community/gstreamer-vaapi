@@ -94,6 +94,7 @@ vaapi_image_is_linear (const VAImage * va_image)
     case VA_FOURCC ('Y', '2', '1', '0'):
     case VA_FOURCC ('Y', '4', '1', '0'):
     case VA_FOURCC ('A', 'R', '3', '0'):
+    case VA_FOURCC ('Y', '2', '1', '2'):
       data_size = 4 * width * height;
       break;
     case VA_FOURCC ('P', '0', '1', '0'):
@@ -103,6 +104,9 @@ vaapi_image_is_linear (const VAImage * va_image)
     case VA_FOURCC ('R', 'G', '2', '4'):
     case VA_FOURCC ('4', '4', '4', 'P'):
       data_size = 3 * width * height;
+      break;
+    case VA_FOURCC ('Y', '4', '1', '2'):
+      data_size = 8 * width * height;
       break;
     default:
       GST_ERROR ("FIXME: incomplete formats %" GST_FOURCC_FORMAT,
@@ -137,7 +141,7 @@ gst_vaapi_image_free (GstVaapiImage * image)
 
   gst_vaapi_display_replace (&GST_VAAPI_IMAGE_DISPLAY (image), NULL);
 
-  g_slice_free1 (sizeof (GstVaapiImage), image);
+  g_free (image);
 }
 
 static gboolean
@@ -280,7 +284,7 @@ gst_vaapi_image_new (GstVaapiDisplay * display,
   GST_DEBUG ("format %s, size %ux%u", gst_vaapi_video_format_to_string (format),
       width, height);
 
-  image = g_slice_new (GstVaapiImage);
+  image = g_new (GstVaapiImage, 1);
   if (!image)
     return NULL;
 
@@ -324,7 +328,7 @@ gst_vaapi_image_new_with_image (GstVaapiDisplay * display, VAImage * va_image)
       GST_FOURCC_ARGS (va_image->format.fourcc),
       va_image->width, va_image->height);
 
-  image = g_slice_new (GstVaapiImage);
+  image = g_new (GstVaapiImage, 1);
   if (!image)
     return NULL;
 

@@ -1,5 +1,5 @@
 ---
-Bug-Database: https://gitlab.freedesktop.org/gstreamer/gstreamer-vaapi/issues
-Bug-Submit: https://gitlab.freedesktop.org/gstreamer/gstreamer-vaapi/issues/new
-Repository: https://gitlab.freedesktop.org/gstreamer/gstreamer-vaapi.git
-Repository-Browse: http://gitlab.freedesktop.org/gstreamer/gstreamer-vaapi
+Bug-Database: https://gitlab.freedesktop.org/gstreamer/gstreamer/-/issues
+Bug-Submit: https://gitlab.freedesktop.org/gstreamer/gstreamer/-/issues/new
+Repository: https://gitlab.freedesktop.org/gstreamer/gstreamer.git
+Repository-Browse: https://gitlab.freedesktop.org/gstreamer/gstreamer

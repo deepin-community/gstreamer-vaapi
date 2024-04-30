@@ -2,17 +2,29 @@
 
 include /usr/share/dpkg/default.mk
 
-CFLAGS += -Wno-error
-CXXFLAGS += -Wno-error
-LDFLAGS += -Wl,-z,defs -Wl,-O1 -Wl,--as-needed
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,-O1 -Wl,-z,defs
 
-conf_flags = --libdir=lib/$(DEB_HOST_MULTIARCH) --libexecdir=lib/$(DEB_HOST_MULTIARCH)/gstreamer1.0
+# Let's decide the package name and url depending on the distribution
+DISTRO = "$(shell dpkg-vendor --query vendor)"
+
+GST_PACKAGE_ORIGIN="https://tracker.debian.org/pkg/gstreamer-vaapi"
+
+ifeq ($(DISTRO),"Debian")
+GST_PACKAGE_ORIGIN="https://tracker.debian.org/pkg/gstreamer-vaapi"
+endif
+
+ifeq ($(DISTRO),"Ubuntu")
+GST_PACKAGE_ORIGIN="https://launchpad.net/ubuntu/+source/gstreamer-vaapi"
+endif
 
 %:
-	dh $@ --buildsystem=meson
+	dh $@
 
 override_dh_auto_configure:
-	dh_auto_configure -- --default-library shared $(conf_flags)
+	dh_auto_configure -- \
+		-Dauto_features=enabled -Ddoc=disabled -Dexamples=disabled \
+		-Dpackage-origin=$(GST_PACKAGE_ORIGIN)
 
 override_dh_auto_test:
 	xvfb-run dh_auto_test || true
