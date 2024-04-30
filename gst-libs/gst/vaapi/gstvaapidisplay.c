@@ -86,6 +86,7 @@ enum
   PROP_SATURATION,
   PROP_BRIGHTNESS,
   PROP_CONTRAST,
+  PROP_VA_DISPLAY,
 
   N_PROPERTIES
 };
@@ -114,23 +115,23 @@ gst_vaapi_display_type_get_type (void)
   static const GEnumValue display_types[] = {
     {GST_VAAPI_DISPLAY_TYPE_ANY,
         "Auto detection", "any"},
-#if USE_X11
+#if GST_VAAPI_USE_X11
     {GST_VAAPI_DISPLAY_TYPE_X11,
         "VA/X11 display", "x11"},
 #endif
-#if USE_GLX
+#if GST_VAAPI_USE_GLX
     {GST_VAAPI_DISPLAY_TYPE_GLX,
         "VA/GLX display", "glx"},
 #endif
-#if USE_EGL
+#if GST_VAAPI_USE_EGL
     {GST_VAAPI_DISPLAY_TYPE_EGL,
         "VA/EGL display", "egl"},
 #endif
-#if USE_WAYLAND
+#if GST_VAAPI_USE_WAYLAND
     {GST_VAAPI_DISPLAY_TYPE_WAYLAND,
         "VA/Wayland display", "wayland"},
 #endif
-#if USE_DRM
+#if GST_VAAPI_USE_DRM
     {GST_VAAPI_DISPLAY_TYPE_DRM,
         "VA/DRM display", "drm"},
 #endif
@@ -556,6 +557,13 @@ ensure_profiles (GstVaapiDisplay * display)
   }
   success = TRUE;
 
+  if (priv->encoders->len == 0)
+    g_clear_pointer (&priv->encoders, g_ptr_array_unref);
+  if (priv->decoders->len == 0)
+    g_clear_pointer (&priv->decoders, g_ptr_array_unref);
+  if (priv->codecs->len == 0)
+    g_clear_pointer (&priv->codecs, g_array_unref);
+
 cleanup:
   g_free (profiles);
   g_free (entrypoints);
@@ -805,7 +813,6 @@ set_driver_quirks (GstVaapiDisplay * display)
     /* @XXX(victor): is this string enough to identify it */
     { "AMD", GST_VAAPI_DRIVER_QUIRK_NO_CHECK_SURFACE_PUT_IMAGE },
     { "i965", GST_VAAPI_DRIVER_QUIRK_NO_CHECK_VPP_COLOR_STD },
-    { "iHD", GST_VAAPI_DRIVER_QUIRK_NO_RGBYUV_VPP_COLOR_PRIMARY },
     { "i965", GST_VAAPI_DRIVER_QUIRK_MISSING_RGBA_IMAGE_FORMAT },
     { "iHD", GST_VAAPI_DRIVER_QUIRK_JPEG_ENC_SHIFT_VALUE_BY_50 },
     { "iHD", GST_VAAPI_DRIVER_QUIRK_HEVC_ENC_SLICE_NOT_SPAN_TILE },
@@ -1124,6 +1131,11 @@ gst_vaapi_display_get_property (GObject * object, guint property_id,
   GstVaapiDisplay *display = GST_VAAPI_DISPLAY (object);
   const GstVaapiProperty *prop;
 
+  if (property_id == PROP_VA_DISPLAY) {
+    g_value_set_pointer (value, gst_vaapi_display_get_display (display));
+    return;
+  }
+
   if (!ensure_properties (display))
     return;
 
@@ -1224,6 +1236,15 @@ gst_vaapi_display_class_init (GstVaapiDisplayClass * klass)
       g_param_spec_float (GST_VAAPI_DISPLAY_PROP_CONTRAST,
       "contrast",
       "The display contrast value", 0.0, 2.0, 1.0, G_PARAM_READWRITE);
+
+  /**
+   * GstVaapiDisplay:va-display:
+   *
+   * The VA display handle, expressed as a #VADisplay.
+   */
+  g_properties[PROP_VA_DISPLAY] =
+      g_param_spec_pointer ("va-display", "VADisplay",
+      "VA Display handler", G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, N_PROPERTIES, g_properties);
   gst_type_mark_as_plugin_api (gst_vaapi_display_type_get_type (), 0);
@@ -1875,13 +1896,13 @@ static gboolean
 get_render_mode_default (GstVaapiDisplay * display, GstVaapiRenderMode * pmode)
 {
   switch (GST_VAAPI_DISPLAY_VADISPLAY_TYPE (display)) {
-#if USE_WAYLAND
+#if GST_VAAPI_USE_WAYLAND
     case GST_VAAPI_DISPLAY_TYPE_WAYLAND:
       /* wl_buffer mapped from VA surface through vaGetSurfaceBufferWl() */
       *pmode = GST_VAAPI_RENDER_MODE_OVERLAY;
       break;
 #endif
-#if USE_DRM
+#if GST_VAAPI_USE_DRM
     case GST_VAAPI_DISPLAY_TYPE_DRM:
       /* vaGetSurfaceBufferDRM() returns the underlying DRM buffer handle */
       *pmode = GST_VAAPI_RENDER_MODE_OVERLAY;

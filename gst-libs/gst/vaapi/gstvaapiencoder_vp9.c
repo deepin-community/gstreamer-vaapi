@@ -28,9 +28,12 @@
 #include "gstvaapiencoder_vp9.h"
 #include "gstvaapicodedbufferproxy_priv.h"
 #include "gstvaapisurface.h"
+#include "gstvaapiutils_vpx.h"
 
 #define DEBUG 1
 #include "gstvaapidebug.h"
+
+#define MAX_TILE_WIDTH_B64 64
 
 /* Define default rate control mode ("constant-qp") */
 #define DEFAULT_RATECONTROL GST_VAAPI_RATECONTROL_CQP
@@ -104,6 +107,7 @@ struct _GstVaapiEncoderVP9
   GstVaapiSurfaceProxy *ref_list[GST_VP9_REF_FRAMES];   /* reference list */
   guint ref_list_idx;           /* next free slot in ref_list */
   GstVaapiEntrypoint entrypoint;
+  GArray *allowed_profiles;
 
   /* Bitrate contral parameters, CPB = Coded Picture Buffer */
   guint bitrate_bits;           /* bitrate (bits) */
@@ -145,60 +149,74 @@ ensure_bitrate (GstVaapiEncoderVP9 * encoder)
   }
 }
 
-/* Derives the profile that suits best to the configuration */
+static gboolean
+is_profile_allowed (GstVaapiEncoderVP9 * encoder, GstVaapiProfile profile)
+{
+  guint i;
+
+  if (encoder->allowed_profiles == NULL)
+    return TRUE;
+
+  for (i = 0; i < encoder->allowed_profiles->len; i++)
+    if (profile ==
+        g_array_index (encoder->allowed_profiles, GstVaapiProfile, i))
+      return TRUE;
+
+  return FALSE;
+}
+
+ /* Derives the profile that suits best to the configuration */
 static GstVaapiEncoderStatus
 ensure_profile (GstVaapiEncoderVP9 * encoder)
 {
+  const GstVideoFormat format =
+      GST_VIDEO_INFO_FORMAT (GST_VAAPI_ENCODER_VIDEO_INFO (encoder));
+  guint depth, chrome;
+
+  if (!GST_VIDEO_FORMAT_INFO_IS_YUV (gst_video_format_get_info (format)))
+    return GST_VAAPI_ENCODER_STATUS_ERROR_UNSUPPORTED_PROFILE;
+
+  depth = GST_VIDEO_FORMAT_INFO_DEPTH (gst_video_format_get_info (format), 0);
+  chrome = gst_vaapi_utils_vp9_get_chroma_format_idc
+      (gst_vaapi_video_format_get_chroma_type
+      (GST_VIDEO_INFO_FORMAT (GST_VAAPI_ENCODER_VIDEO_INFO (encoder))));
+
+  encoder->profile = GST_VAAPI_PROFILE_UNKNOWN;
   /*
      Profile Color | Depth Chroma | Subsampling
      0             | 8 bit/sample | 4:2:0
      1             | 8 bit        | 4:2:2, 4:4:4
      2             | 10 or 12 bit | 4:2:0
      3             | 10 or 12 bit | 4:2:2, 4:4:4     */
-  const GstVideoFormat format =
-      GST_VIDEO_INFO_FORMAT (GST_VAAPI_ENCODER_VIDEO_INFO (encoder));
-  if (format == GST_VIDEO_FORMAT_P010_10LE)
-    encoder->profile = GST_VAAPI_PROFILE_VP9_2;
-  else
-    encoder->profile = GST_VAAPI_PROFILE_VP9_0;
+  if (chrome == 3 || chrome == 2) {
+    /* 4:4:4 and 4:2:2 */
+    if (depth == 8) {
+      encoder->profile = GST_VAAPI_PROFILE_VP9_1;
+    } else if (depth == 10 || depth == 12) {
+      encoder->profile = GST_VAAPI_PROFILE_VP9_3;
+    }
+  } else if (chrome == 1) {
+    /* 4:2:0 */
+    if (depth == 8) {
+      encoder->profile = GST_VAAPI_PROFILE_VP9_0;
+    } else if (depth == 10 || depth == 12) {
+      encoder->profile = GST_VAAPI_PROFILE_VP9_2;
+    }
+  }
+
+  if (encoder->profile == GST_VAAPI_PROFILE_UNKNOWN) {
+    GST_WARNING ("Failed to decide VP9 profile");
+    return GST_VAAPI_ENCODER_STATUS_ERROR_UNSUPPORTED_PROFILE;
+  }
+
+  if (!is_profile_allowed (encoder, encoder->profile)) {
+    GST_WARNING ("Failed to find an allowed VP9 profile");
+    return GST_VAAPI_ENCODER_STATUS_ERROR_UNSUPPORTED_PROFILE;
+  }
 
   /* Ensure bitrate if not set already */
   ensure_bitrate (encoder);
-
   return GST_VAAPI_ENCODER_STATUS_SUCCESS;
-}
-
-/* Derives the profile supported by the underlying hardware */
-static gboolean
-ensure_hw_profile (GstVaapiEncoderVP9 * encoder)
-{
-  GstVaapiDisplay *const display = GST_VAAPI_ENCODER_DISPLAY (encoder);
-  GstVaapiEntrypoint entrypoint = encoder->entrypoint;
-  GstVaapiProfile profile, profiles[2];
-  guint i, num_profiles = 0;
-
-  profiles[num_profiles++] = encoder->profile;
-
-  profile = GST_VAAPI_PROFILE_UNKNOWN;
-  for (i = 0; i < num_profiles; i++) {
-    if (gst_vaapi_display_has_encoder (display, profiles[i], entrypoint)) {
-      profile = profiles[i];
-      break;
-    }
-  }
-  if (profile == GST_VAAPI_PROFILE_UNKNOWN)
-    goto error_unsupported_profile;
-
-  GST_VAAPI_ENCODER_CAST (encoder)->profile = profile;
-  return TRUE;
-
-  /* ERRORS */
-error_unsupported_profile:
-  {
-    GST_ERROR ("unsupported HW profile %s",
-        gst_vaapi_profile_get_va_name (encoder->profile));
-    return FALSE;
-  }
 }
 
 static GstVaapiEncoderStatus
@@ -210,8 +228,7 @@ set_context_info (GstVaapiEncoder * base_encoder)
 
   /* FIXME: Maximum sizes for common headers (in bytes) */
 
-  if (!ensure_hw_profile (encoder))
-    return GST_VAAPI_ENCODER_STATUS_ERROR_UNSUPPORTED_PROFILE;
+  GST_VAAPI_ENCODER_CAST (encoder)->profile = encoder->profile;
 
   base_encoder->num_ref_frames = 3 + DEFAULT_SURFACES_COUNT;
 
@@ -341,6 +358,7 @@ fill_picture (GstVaapiEncoderVP9 * encoder,
   VAEncPictureParameterBufferVP9 *const pic_param = picture->param;
   guint i, last_idx = 0, gf_idx = 0, arf_idx = 0;
   guint8 refresh_frame_flags = 0;
+  gint sb_cols = 0, min_log2_tile_columns = 0;
 
   memset (pic_param, 0, sizeof (VAEncPictureParameterBufferVP9));
 
@@ -383,6 +401,14 @@ fill_picture (GstVaapiEncoderVP9 * encoder,
     pic_param->ref_flags.bits.ref_arf_idx = arf_idx;
     pic_param->refresh_frame_flags = refresh_frame_flags;
   }
+
+  /* Maximum width of a tile in units of superblocks is MAX_TILE_WIDTH_B64(64).
+   * When the width is enough to partition more than MAX_TILE_WIDTH_B64(64) superblocks,
+   * we need multi tiles to handle it.*/
+  sb_cols = (pic_param->frame_width_src + 63) / 64;
+  while ((MAX_TILE_WIDTH_B64 << min_log2_tile_columns) < sb_cols)
+    ++min_log2_tile_columns;
+  pic_param->log2_tile_columns = min_log2_tile_columns;
 
   pic_param->luma_ac_qindex = encoder->yac_qi;
   pic_param->luma_dc_qindex_delta = 1;
@@ -530,7 +556,7 @@ gst_vaapi_encoder_vp9_reconfigure (GstVaapiEncoder * base_encoder)
   encoder->entrypoint =
       gst_vaapi_encoder_get_entrypoint (base_encoder, encoder->profile);
   if (encoder->entrypoint == GST_VAAPI_ENTRYPOINT_INVALID) {
-    GST_WARNING ("Cannot find valid entrypoint");
+    GST_WARNING ("Cannot find valid profile/entrypoint pair");
     return GST_VAAPI_ENCODER_STATUS_ERROR_UNSUPPORTED_PROFILE;
   }
 
@@ -560,6 +586,19 @@ gst_vaapi_encoder_vp9_init (GstVaapiEncoderVP9 * encoder)
   memset (encoder->ref_list, 0,
       G_N_ELEMENTS (encoder->ref_list) * sizeof (encoder->ref_list[0]));
   encoder->ref_list_idx = 0;
+
+  encoder->allowed_profiles = NULL;
+}
+
+static void
+gst_vaapi_encoder_vp9_finalize (GObject * object)
+{
+  GstVaapiEncoderVP9 *const encoder = GST_VAAPI_ENCODER_VP9 (object);
+
+  if (encoder->allowed_profiles)
+    g_array_unref (encoder->allowed_profiles);
+
+  G_OBJECT_CLASS (gst_vaapi_encoder_vp9_parent_class)->finalize (object);
 }
 
 /**
@@ -678,6 +717,7 @@ gst_vaapi_encoder_vp9_class_init (GstVaapiEncoderVP9Class * klass)
 
   object_class->set_property = gst_vaapi_encoder_vp9_set_property;
   object_class->get_property = gst_vaapi_encoder_vp9_get_property;
+  object_class->finalize = gst_vaapi_encoder_vp9_finalize;
 
   properties[ENCODER_VP9_PROP_RATECONTROL] =
       g_param_spec_enum ("rate-control",
@@ -762,4 +802,23 @@ GstVaapiEncoder *
 gst_vaapi_encoder_vp9_new (GstVaapiDisplay * display)
 {
   return g_object_new (GST_TYPE_VAAPI_ENCODER_VP9, "display", display, NULL);
+}
+
+/**
+ * gst_vaapi_encoder_vp9_set_allowed_profiles:
+ * @encoder: a #GstVaapiEncoderVP9
+ * @profiles: a #GArray of all allowed #GstVaapiProfile.
+ *
+ * Set the all allowed profiles for the encoder.
+ *
+ * Return value: %TRUE on success
+ */
+gboolean
+gst_vaapi_encoder_vp9_set_allowed_profiles (GstVaapiEncoderVP9 * encoder,
+    GArray * profiles)
+{
+  g_return_val_if_fail (profiles != 0, FALSE);
+
+  encoder->allowed_profiles = g_array_ref (profiles);
+  return TRUE;
 }

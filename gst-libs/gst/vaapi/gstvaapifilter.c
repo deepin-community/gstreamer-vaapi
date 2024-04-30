@@ -20,6 +20,8 @@
  *  Boston, MA 02110-1301 USA
  */
 
+#include "config.h"
+
 #include "sysdeps.h"
 #include "gstvaapicompat.h"
 #include "gstvaapifilter.h"
@@ -536,7 +538,7 @@ static void
 op_data_free (GstVaapiFilterOpData * op_data)
 {
   g_free (op_data->va_caps);
-  g_slice_free (GstVaapiFilterOpData, op_data);
+  g_free (op_data);
 }
 
 static inline gpointer
@@ -544,7 +546,7 @@ op_data_new (GstVaapiFilterOp op, GParamSpec * pspec)
 {
   GstVaapiFilterOpData *op_data;
 
-  op_data = g_slice_new0 (GstVaapiFilterOpData);
+  op_data = g_new0 (GstVaapiFilterOpData, 1);
   if (!op_data)
     return NULL;
 
@@ -671,7 +673,7 @@ op_data_ensure_caps (GstVaapiFilterOpData * op_data, gpointer filter_caps,
       return FALSE;
   }
 
-  op_data->va_caps = g_memdup (filter_cap, op_data->va_cap_size * va_num_caps);
+  op_data->va_caps = g_memdup2 (filter_cap, op_data->va_cap_size * va_num_caps);
   if (!op_data->va_caps)
     return FALSE;
 
@@ -786,10 +788,12 @@ get_operations_ordered (GstVaapiFilter * filter, GPtrArray * default_ops)
         filter_caps = vpp_get_filter_caps (filter, va_type,
             op_data->va_cap_size, &num_filter_caps);
         if (!filter_caps)
-          goto error;
+          continue;
       }
+
       if (!op_data_ensure_caps (op_data, filter_caps, num_filter_caps))
-        goto error;
+        continue;
+
       g_ptr_array_add (ops, op_data_ref (op_data));
     }
     free (filter_caps);
@@ -1642,22 +1646,6 @@ gst_vaapi_filter_fill_color_standards (GstVaapiFilter * filter,
   fill_color_standard (&filter->output_colorimetry,
       &pipeline_param->output_color_standard,
       &pipeline_param->output_color_properties);
-
-  /* Handle RGB <-> YUV color primary driver quirk */
-  if (gst_vaapi_display_has_driver_quirks (filter->display,
-          GST_VAAPI_DRIVER_QUIRK_NO_RGBYUV_VPP_COLOR_PRIMARY)) {
-    gboolean src_is_rgb = gst_video_colorimetry_matches
-        (&filter->input_colorimetry, GST_VIDEO_COLORIMETRY_SRGB);
-    gboolean dst_is_rgb = gst_video_colorimetry_matches
-        (&filter->output_colorimetry, GST_VIDEO_COLORIMETRY_SRGB);
-
-    if ((!src_is_rgb && dst_is_rgb) || (src_is_rgb && !dst_is_rgb)) {
-      pipeline_param->output_color_standard = VAProcColorStandardExplicit;
-      pipeline_param->output_color_properties.colour_primaries =
-          gst_video_color_primaries_to_iso (filter->
-          input_colorimetry.primaries);
-    }
-  }
 #else
   pipeline_param->surface_color_standard = VAProcColorStandardNone;
   pipeline_param->output_color_standard = VAProcColorStandardNone;
@@ -1857,6 +1845,10 @@ gst_vaapi_filter_process (GstVaapiFilter * filter,
 /**
  * gst_vaapi_filter_get_formats:
  * @filter: a #GstVaapiFilter
+ * @min_width: the min width can be supported.
+ * @min_height: the min height can be supported.
+ * @max_width: the max width can be supported.
+ * @max_height: the max height can be supported.
  *
  * Determines the set of supported source or target formats for video
  * processing.  The caller owns an extra reference to the resulting
@@ -1866,12 +1858,31 @@ gst_vaapi_filter_process (GstVaapiFilter * filter,
  * Return value: the set of supported target formats for video processing.
  */
 GArray *
-gst_vaapi_filter_get_formats (GstVaapiFilter * filter)
+gst_vaapi_filter_get_formats (GstVaapiFilter * filter, gint * min_width,
+    gint * min_height, gint * max_width, gint * max_height)
 {
+  GstVaapiConfigSurfaceAttributes *attribs;
+
   g_return_val_if_fail (filter != NULL, NULL);
 
   if (!ensure_attributes (filter))
     return NULL;
+
+  attribs = filter->attribs;
+
+  if (attribs->min_width >= attribs->max_width ||
+      attribs->min_height >= attribs->max_height)
+    return NULL;
+
+  if (min_width)
+    *min_width = attribs->min_width;
+  if (min_height)
+    *min_height = attribs->min_height;
+  if (max_width)
+    *max_width = attribs->max_width;
+  if (max_height)
+    *max_height = attribs->max_height;
+
   if (filter->attribs->formats)
     return g_array_ref (filter->attribs->formats);
   return NULL;

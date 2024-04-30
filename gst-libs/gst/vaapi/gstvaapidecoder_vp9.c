@@ -259,12 +259,16 @@ ensure_context (GstVaapiDecoderVp9 * decoder)
 
   if (reset_context) {
     GstVaapiContextInfo info;
+    /* *INDENT-OFF* */
+    info = (GstVaapiContextInfo) {
+      .profile = priv->profile,
+      .entrypoint = entrypoint,
+      .width = priv->width,
+      .height = priv->height,
+      .ref_frames = 8,
+    };
+    /* *INDENT-ON* */
 
-    info.profile = priv->profile;
-    info.entrypoint = entrypoint;
-    info.width = priv->width;
-    info.height = priv->height;
-    info.ref_frames = 8;
     if (!get_chroma_type (frame_hdr, parser, &info))
       return GST_VAAPI_DECODER_STATUS_ERROR_UNSUPPORTED_CHROMA_FORMAT;
 
@@ -303,11 +307,7 @@ vaapi_fill_ref_frames (GstVaapiDecoderVp9 * decoder, GstVaapiPicture * picture,
   GstVaapiDecoderVp9Private *const priv = &decoder->priv;
   guint i;
 
-  if (frame_hdr->frame_type == GST_VP9_KEY_FRAME) {
-    for (i = 0; i < G_N_ELEMENTS (priv->ref_frames); i++)
-      pic_param->reference_frames[i] = picture->surface_id;
-
-  } else {
+  if (frame_hdr->frame_type != GST_VP9_KEY_FRAME) {
     pic_param->pic_fields.bits.last_ref_frame =
         frame_hdr->ref_frame_indices[GST_VP9_REF_FRAME_LAST - 1];
     pic_param->pic_fields.bits.last_ref_frame_sign_bias =
@@ -321,6 +321,7 @@ vaapi_fill_ref_frames (GstVaapiDecoderVp9 * decoder, GstVaapiPicture * picture,
     pic_param->pic_fields.bits.alt_ref_frame_sign_bias =
         frame_hdr->ref_frame_sign_bias[GST_VP9_REF_FRAME_ALTREF - 1];
   }
+
   for (i = 0; i < G_N_ELEMENTS (priv->ref_frames); i++) {
     pic_param->reference_frames[i] = priv->ref_frames[i] ?
         priv->ref_frames[i]->surface_id : VA_INVALID_SURFACE;
@@ -386,8 +387,14 @@ fill_picture (GstVaapiDecoderVp9 * decoder, GstVaapiPicture * picture)
 
   memcpy (pic_param->mb_segment_tree_probs, parser->mb_segment_tree_probs,
       sizeof (parser->mb_segment_tree_probs));
-  memcpy (pic_param->segment_pred_probs, parser->segment_pred_probs,
-      sizeof (parser->segment_pred_probs));
+
+  if (frame_hdr->segmentation.temporal_update) {
+    memcpy (pic_param->segment_pred_probs, parser->segment_pred_probs,
+        sizeof (parser->segment_pred_probs));
+  } else {
+    memset (pic_param->segment_pred_probs, 255,
+        sizeof (pic_param->segment_pred_probs));
+  }
 
   return TRUE;
 }
