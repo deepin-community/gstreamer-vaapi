@@ -1,3 +1,64 @@
+=== release 1.24.6 ===
+
+2024-07-29 16:41:37 +0100  Tim-Philipp Müller <tim@centricular.com>
+
+	* NEWS:
+	* RELEASE:
+	* gstreamer-vaapi.doap:
+	* meson.build:
+	  Release 1.24.6
+
+2024-06-20 13:02:19 +0100  Tim-Philipp Müller <tim@centricular.com>
+
+	* meson.build:
+	  Back to development after 1.24.5
+
+=== release 1.24.5 ===
+
+2024-06-20 12:54:15 +0100  Tim-Philipp Müller <tim@centricular.com>
+
+	* NEWS:
+	* RELEASE:
+	* gstreamer-vaapi.doap:
+	* meson.build:
+	  Release 1.24.5
+
+2024-05-29 13:51:27 +0300  Tim-Philipp Müller <tim@centricular.com>
+
+	* meson.build:
+	  Back to development after 1.24.4
+
+=== release 1.24.4 ===
+
+2024-05-29 13:44:50 +0300  Tim-Philipp Müller <tim@centricular.com>
+
+	* NEWS:
+	* RELEASE:
+	* gstreamer-vaapi.doap:
+	* meson.build:
+	  Release 1.24.4
+
+2024-04-30 00:36:59 +0100  Tim-Philipp Müller <tim@centricular.com>
+
+	* meson.build:
+	  Back to development after 1.24.3
+	  Part-of: <https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/6772>
+
+=== release 1.24.3 ===
+
+2024-04-30 00:15:23 +0100  Tim-Philipp Müller <tim@centricular.com>
+
+	* NEWS:
+	* RELEASE:
+	* gstreamer-vaapi.doap:
+	* meson.build:
+	  Release 1.24.3
+
+2024-04-10 00:04:02 +0100  Tim-Philipp Müller <tim@centricular.com>
+
+	* meson.build:
+	  Back to development after 1.24.2
+
 === release 1.24.2 ===
 
 2024-04-09 21:48:55 +0100  Tim-Philipp Müller <tim@centricular.com>

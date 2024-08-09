@@ -1,3 +1,27 @@
+gstreamer-vaapi (1.24.6-1) unstable; urgency=medium
+
+  * New upstream version 1.24.6
+
+ -- Marc Leeman <marc.leeman@gmail.com>  Mon, 29 Jul 2024 19:35:09 +0200
+
+gstreamer-vaapi (1.24.5-1) unstable; urgency=medium
+
+  * New upstream version 1.24.5
+
+ -- Marc Leeman <marc.leeman@gmail.com>  Thu, 20 Jun 2024 16:37:04 +0200
+
+gstreamer-vaapi (1.24.4-1) unstable; urgency=medium
+
+  * New upstream version 1.24.4
+
+ -- Marc Leeman <marc.leeman@gmail.com>  Wed, 29 May 2024 14:25:32 +0200
+
+gstreamer-vaapi (1.24.3-1) unstable; urgency=medium
+
+  * New upstream version 1.24.3
+
+ -- Marc Leeman <marc.leeman@gmail.com>  Tue, 30 Apr 2024 11:31:45 +0200
+
 gstreamer-vaapi (1.24.2-1) unstable; urgency=medium
 
   * New upstream version 1.24.2
